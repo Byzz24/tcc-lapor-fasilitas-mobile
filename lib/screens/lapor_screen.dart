@@ -6,7 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import '../utils/constants.dart';
-import 'package:http_parser/http_parser.dart'; // Import ini wajib untuk MediaType
+import 'package:http_parser/http_parser.dart';
 
 class LaporScreen extends StatefulWidget {
   const LaporScreen({super.key});

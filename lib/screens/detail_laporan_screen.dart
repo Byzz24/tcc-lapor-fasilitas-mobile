@@ -20,15 +20,30 @@ class _DetailLaporanScreenState extends State<DetailLaporanScreen> {
   String _userRole = 'warga';
   bool _isUpdatingStatus = false;
 
+  // State untuk fitur komentar
+  List<dynamic> _komentarList = [];
+  bool _isLoadingKomentar = false;
+  bool _isSendingKomentar = false;
+  final TextEditingController _komentarController = TextEditingController();
+  int? _userId;
+  String _userName = 'Anonim';
+
   @override
   void initState() {
     super.initState();
     _muatDetailDanRole();
   }
 
+  @override
+  void dispose() {
+    _komentarController.dispose();
+    super.dispose();
+  }
+
   Future<void> _muatDetailDanRole() async {
     await _fetchDetailLaporan();
     await _loadUserRole();
+    await _fetchKomentar();
   }
 
   Future<void> _loadUserRole() async {
@@ -36,7 +51,75 @@ class _DetailLaporanScreenState extends State<DetailLaporanScreen> {
     setState(() {
       _userRole =
           prefs.getString('role') ?? prefs.getString('user_role') ?? 'warga';
+      _userId = prefs.getInt('user_id');
+      _userName =
+          prefs.getString('nama') ?? prefs.getString('name') ?? 'Anonim';
     });
+  }
+
+  // Ambil daftar komentar publik dari API
+  Future<void> _fetchKomentar() async {
+    setState(() => _isLoadingKomentar = true);
+    try {
+      final response = await http.get(
+        Uri.parse(
+          '${Constants.baseUrl}/api/laporan/${widget.laporanId}/komentar',
+        ),
+      );
+      if (response.statusCode == 200) {
+        final result = jsonDecode(response.body);
+        setState(() {
+          _komentarList = result['komentar'] ?? [];
+        });
+      }
+    } catch (e) {
+      debugPrint('Gagal memuat komentar: $e');
+    } finally {
+      if (mounted) setState(() => _isLoadingKomentar = false);
+    }
+  }
+
+  // Kirim komentar baru ke API
+  Future<void> _kirimKomentar() async {
+    final teks = _komentarController.text.trim();
+    if (teks.isEmpty) return;
+    if (_userId == null) {
+      _tampilkanPesan('Silakan login terlebih dahulu', isError: true);
+      return;
+    }
+
+    setState(() => _isSendingKomentar = true);
+    try {
+      final response = await http.post(
+        Uri.parse(
+          '${Constants.baseUrl}/api/laporan/${widget.laporanId}/komentar',
+        ),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'user_id': _userId,
+          'nama_samaran': _userName,
+          'teks_komentar': teks,
+        }),
+      );
+
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        _komentarController.clear();
+        FocusScope.of(context).unfocus();
+        await _fetchKomentar();
+        _tampilkanPesan('Komentar berhasil dikirim', isError: false);
+      } else {
+        _tampilkanPesan('Gagal mengirim komentar', isError: true);
+      }
+    } catch (e) {
+      _tampilkanPesan(
+        'Kesalahan koneksi saat mengirim komentar',
+        isError: true,
+      );
+    } finally {
+      if (mounted) setState(() => _isSendingKomentar = false);
+    }
   }
 
   Future<void> _fetchDetailLaporan() async {
@@ -539,11 +622,228 @@ class _DetailLaporanScreenState extends State<DetailLaporanScreen> {
                     'Belum ada riwayat penanganan untuk laporan ini.',
                     style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
                   ),
+                const SizedBox(height: 32),
+                _buildSectionKomentar(),
               ],
             ),
           ),
         ],
       ),
+    );
+  }
+
+  // Widget section komentar publik
+  Widget _buildSectionKomentar() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.forum_rounded, color: Colors.blue.shade700, size: 20),
+            const SizedBox(width: 8),
+            const Text(
+              'Komentar Warga',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey,
+              ),
+            ),
+            const Spacer(),
+            if (_komentarList.isNotEmpty)
+              Text(
+                '${_komentarList.length} komentar',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade400),
+              ),
+          ],
+        ),
+        const SizedBox(height: 16),
+
+        // Form input komentar
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.grey.shade200),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _komentarController,
+                  decoration: InputDecoration(
+                    hintText: 'Tulis komentar...',
+                    hintStyle: TextStyle(
+                      color: Colors.grey.shade400,
+                      fontSize: 14,
+                    ),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
+                  ),
+                  maxLines: 3,
+                  minLines: 1,
+                  textInputAction: TextInputAction.send,
+                  onSubmitted: (_) => _kirimKomentar(),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(right: 8, bottom: 6),
+                child: _isSendingKomentar
+                    ? const Padding(
+                        padding: EdgeInsets.all(10),
+                        child: SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    : IconButton(
+                        onPressed: _kirimKomentar,
+                        icon: Icon(
+                          Icons.send_rounded,
+                          color: Colors.blue.shade700,
+                        ),
+                        splashRadius: 24,
+                      ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // Daftar komentar
+        if (_isLoadingKomentar)
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          )
+        else if (_komentarList.isEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              children: [
+                Icon(
+                  Icons.chat_bubble_outline,
+                  size: 36,
+                  color: Colors.grey.shade300,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Belum ada komentar.\nJadi yang pertama berkomentar!',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
+                ),
+              ],
+            ),
+          )
+        else
+          ...List.generate(_komentarList.length, (index) {
+            final komentar = _komentarList[index];
+            final String nama = komentar['nama_samaran'] ?? 'Anonim';
+            final String teks = komentar['teks_komentar'] ?? '';
+            final String waktu = komentar['waktu'] ?? '';
+            final bool isSelf = komentar['user_id'] == _userId;
+
+            // Format waktu singkat
+            String waktuFormatted = '';
+            if (waktu.isNotEmpty) {
+              try {
+                final dt = DateTime.parse(waktu);
+                final now = DateTime.now();
+                final diff = now.difference(dt);
+                if (diff.inMinutes < 1) {
+                  waktuFormatted = 'Baru saja';
+                } else if (diff.inMinutes < 60) {
+                  waktuFormatted = '${diff.inMinutes} menit lalu';
+                } else if (diff.inHours < 24) {
+                  waktuFormatted = '${diff.inHours} jam lalu';
+                } else {
+                  waktuFormatted = '${diff.inDays} hari lalu';
+                }
+              } catch (_) {
+                waktuFormatted = waktu;
+              }
+            }
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: isSelf ? Colors.blue.shade50 : Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: isSelf ? Colors.blue.shade200 : Colors.grey.shade200,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 14,
+                        backgroundColor: isSelf
+                            ? Colors.blue.shade700
+                            : Colors.grey.shade400,
+                        child: Text(
+                          nama.isNotEmpty ? nama[0].toUpperCase() : '?',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          isSelf ? '$nama (Anda)' : nama,
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            color: isSelf
+                                ? Colors.blue.shade800
+                                : Colors.grey.shade800,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        waktuFormatted,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey.shade400,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 38),
+                    child: Text(
+                      teks,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey.shade700,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+      ],
     );
   }
 }
