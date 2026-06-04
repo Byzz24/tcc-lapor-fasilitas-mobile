@@ -36,7 +36,7 @@ class _ProfilScreenState extends State<ProfilScreen> {
     _tarikDataLangsungDariDatabase();
   }
 
-  // Penarikan data profil terbaru langsung dari server
+  // Tarik data profil terbaru langsung dari server
   Future<void> _tarikDataLangsungDariDatabase() async {
     final prefs = await SharedPreferences.getInstance();
     _userId = prefs.getInt('user_id');

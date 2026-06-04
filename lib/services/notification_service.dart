@@ -89,7 +89,7 @@ class NotificationService {
     }
   }
 
-  // Fungsi yang dipanggil setelah proses login berhasil untuk memastikan token FCM
+  // Dipanggil setelah proses login berhasil untuk memastikan token FCM
   // selalu tersimpan di database (saat app pertama dibuka, user_id belum ada)
   Future<void> kirimTokenSetelahLogin() async {
     try {

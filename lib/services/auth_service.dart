@@ -15,7 +15,7 @@ class AuthService {
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 200) {
-        // Penyimpanan token dan data user ke penyimpanan lokal
+        // Simpan token dan data user ke penyimpanan lokal
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('token', data['access_token']);
         await prefs.setInt('user_id', data['user_info']['id']);

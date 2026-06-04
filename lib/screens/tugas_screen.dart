@@ -37,7 +37,7 @@ class _TugasScreenState extends State<TugasScreen> {
         final result = jsonDecode(response.body);
         final List<dynamic> allData = result['data'] ?? [];
 
-        // Pemfilteran: Hanya menampilkan tugas yang belum Selesai
+        // Filter untuk hanya menampilkan tugas yang belum Selesai
         final activeTasks = allData.where((laporan) {
           final status = laporan['status_perbaikan'];
           return status != 'selesai';
